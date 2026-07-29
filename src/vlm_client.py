@@ -21,13 +21,19 @@ class VLMClient:
     def __init__(self, model: str | None = None) -> None:
         load_dotenv(Path(__file__).resolve().parents[1] / ".env")
         self.api_style = os.getenv("VLM_API_STYLE", "openai").lower()
-        self.api_key = os.getenv("API_KEY", "")
-        self.base_url = os.getenv("BASE_URL")
-        self.model = model or os.getenv("MODEL_NAME", "")
+        dashscope_api_key = os.getenv("DASHSCOPE_API_KEY", "")
+        self.api_key = os.getenv("API_KEY", "") or dashscope_api_key
+        self.base_url = os.getenv("BASE_URL") or (
+            "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+            if dashscope_api_key else None
+        )
+        self.model = model or os.getenv("MODEL_NAME", "") or (
+            "qwen3.7-plus" if dashscope_api_key else ""
+        )
         self.endpoint = os.getenv("VLM_ENDPOINT", "")
         self.timeout = int(os.getenv("REQUEST_TIMEOUT", "60"))
         self.max_retries = int(os.getenv("MAX_RETRIES", "3"))
-        self.max_output_tokens = int(os.getenv("MAX_OUTPUT_TOKENS", "500"))
+        self.max_output_tokens = int(os.getenv("MAX_OUTPUT_TOKENS", "2000"))
         self.force_ipv4 = os.getenv("FORCE_IPV4", "true").lower() not in {
             "0",
             "false",

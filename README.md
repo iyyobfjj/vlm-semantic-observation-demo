@@ -1,5 +1,25 @@
 # VLM Semantic Observation Demo
 
+SAM2 实例分割结果可通过 `scripts/generate_sam2_descriptions.py` 生成逐帧中文描述和跨帧语音摘要。该功能在本地离线运行，不调用 VLM API。
+
+```bash
+python scripts/generate_sam2_descriptions.py \
+  --rgb-dir <RGB目录> \
+  --sam2-dir <SAM2输出目录> \
+  --output-dir outputs/sam2_description
+```
+
+每帧需要 `<frame_id>.png`、`<frame_id>.json` 与 `<frame_id>_labels.png`。输出包括 `descriptions/frames/*.json`、`speech_summary.json` 和 `summary.txt`；二维位置仅表示图像九宫格方位，不代表地图坐标或真实距离。
+
+需要同时生成带实例边界、中文名称和 track 编号的叠加图时，使用完整流水线：
+
+```bash
+python scripts/run_sam2_pipeline.py \
+  --rgb-dir <RGB目录> \
+  --sam2-dir <SAM2输出目录> \
+  --output-dir outputs/sam2_description
+```
+
 这个 demo 用于验证机器人关灯巡检/公司场景服务机器人的第一阶段最小闭环：
 
 本地图像输入 -> 调用公司 VLM API -> 输出结构化 JSON -> 保存本地 JSON/SQLite -> 支持简单语义查询 -> 返回原图路径和语义观测结果。

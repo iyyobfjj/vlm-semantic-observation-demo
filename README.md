@@ -1,24 +1,93 @@
 # VLM Semantic Observation Demo
 
-SAM2 实例分割结果可通过 `scripts/generate_sam2_descriptions.py` 生成逐帧中文描述和跨帧语音摘要。该功能在本地离线运行，不调用 VLM API。
+要把 SAM2 分割物体生成 VLM 描述并关联 PCD 点云，请直接看
+[SAM2 物体描述与点云关联教程](POINTCLOUD_DESCRIPTION_GUIDE.md)。
+该教程也包含与原整图 VLM 描述合成统一 JSON 的命令。
 
-```bash
-python scripts/generate_sam2_descriptions.py \
-  --rgb-dir <RGB目录> \
-  --sam2-dir <SAM2输出目录> \
-  --output-dir outputs/sam2_description
+接口字段和实现边界见 [SAM2_VLM_TASK.md](SAM2_VLM_TASK.md)。原
+`run_sam2_pipeline.py` 仍是无网络、无 API 费用的确定性离线基线。
+
+水杯、MCP、义博 `robot_edge`、翊宸采集服务和本仓库之间的当前连接边界、部署位置及启动方式见 [INTEGRATION_HANDOFF.md](INTEGRATION_HANDOFF.md)。
+
+本仓库包含两条相互独立的离线流程：
+
+1. **SAM2 实例结果转语义描述**：读取已有 RGB、SAM2 元数据和标签图，输出物品清单、图像二维位置、标注图和中文播报文本。这是当前交付的主要入口。
+2. **VLM API 语义观测 Demo**：调用兼容 API，将普通场景图片转换为结构化语义观测并写入 SQLite。
+
+## SAM2 实例结果转语义描述
+
+### 适用场景
+
+用于把翊宸侧已经生成的 SAM2 实例分割结果整理成义博侧巡检界面或播报模块容易消费的结果。该流程完全离线，不会调用 ROS、机器人服务或外部 VLM API。
+
+输入内容：
+
+```text
+rgb/<frame_id>.png
+sam2/<frame_id>.json
+sam2/<frame_id>_labels.png
 ```
 
-每帧需要 `<frame_id>.png`、`<frame_id>.json` 与 `<frame_id>_labels.png`。输出包括 `descriptions/frames/*.json`、`speech_summary.json` 和 `summary.txt`；二维位置仅表示图像九宫格方位，不代表地图坐标或真实距离。
+每个实例会输出类别、track ID、边界框、中心点、掩码面积和图像二维方位。天花板、地面、地毯等背景类别会被过滤。
 
-需要同时生成带实例边界、中文名称和 track 编号的叠加图时，使用完整流水线：
+### 快速运行
 
-```bash
-python scripts/run_sam2_pipeline.py \
-  --rgb-dir <RGB目录> \
-  --sam2-dir <SAM2输出目录> \
-  --output-dir outputs/sam2_description
+```powershell
+conda activate gr
+cd <vlm-semantic-observation-demo 仓库路径>
+python -m pip install -r requirements.txt
+
+python scripts\run_sam2_pipeline.py `
+  --rgb-dir <RGB目录> `
+  --sam2-dir <SAM2目录> `
+  --output-dir outputs\sam2_description
 ```
+
+在当前开发目录结构中，也可以直接使用脚本内的默认目录：
+
+```powershell
+python scripts\run_sam2_pipeline.py
+```
+
+### 输出内容
+
+```text
+outputs/sam2_description/
+  acceptance_report.json       # 整批处理是否成功及产物路径
+  scene_summary.json            # 去重后的物品实例和整批统计
+  speech_summary.json           # 中文总结及可直接播报的文本
+  summary.txt                   # 便于人工查看的文本摘要
+  visualization_manifest.json  # 原始帧、标注图和描述文件的对应关系
+  frames/                       # 逐帧结构化实例观测 JSON
+  overlays/                     # 带实例框、名称和 track ID 的效果图
+  descriptions/frames/         # 逐帧中文描述
+```
+
+当前 30 帧样例的验收结果为：
+
+```json
+{
+  "success": true,
+  "frame_count": 30,
+  "visible_observation_count": 28,
+  "unique_track_count": 8,
+  "rendered_frame_count": 30,
+  "description_frame_count": 30,
+  "mask_metadata_alignment_ok": true
+}
+```
+
+对应的中文播报文本为：
+
+```text
+视觉巡检完成，识别到3个储物柜、2个开关、1个冰箱、1个微波炉和1个垃圾桶。
+```
+
+这里的“左侧”“中央”“右下方”等位置只表示物品在图像中的二维方位，不代表地图坐标、真实距离或三维位置。当前流程也不负责物品间空间关系推理、机器人导航和机械臂操作。
+
+完整的输入约定、字段说明、样例基线和测试命令见 [SAM2_HANDOFF.md](SAM2_HANDOFF.md)。
+
+## 原有 VLM API 语义观测 Demo
 
 这个 demo 用于验证机器人关灯巡检/公司场景服务机器人的第一阶段最小闭环：
 
